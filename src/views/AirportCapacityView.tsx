@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
 import { AirlineDataset, AirportCapacityAnalysis, Flight } from '../types/airline';
-import {
-  Building2,
-  AlertTriangle,
-  CheckCircle2,
-  TrendingUp,
-  Clock,
-  Layers,
-  Plane
-} from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -17,8 +9,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  LineChart,
-  Line,
   CartesianGrid
 } from 'recharts';
 
@@ -55,23 +45,26 @@ export const AirportCapacityView: React.FC<AirportCapacityViewProps> = ({
       <div className="glass-panel p-5 rounded-xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <Building2 className="w-5 h-5 text-cyan-400" />
+            <Building2 className="w-5 h-5 text-cyan-400" aria-hidden="true" />
             <h2 className="text-base font-bold text-white tracking-wide">
               AIRPORT HOURLY FLIGHT MOVEMENTS & RUNWAY CAPACITY
             </h2>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Rule: Analyse hourly departures + arrivals against airport capacity_per_hour
+            Rule: Analyse hourly departures + arrivals against airport capacity_per_hour • {flights.length} Scheduled Legs ({dataset.meta.dataset})
           </p>
         </div>
 
         {/* Airport Hub Selector */}
         <div className="flex items-center space-x-2 font-mono text-xs">
-          <span className="text-slate-400">Select Hub:</span>
+          <label htmlFor="airport-hub-select" className="text-slate-400">
+            Select Hub:
+          </label>
           <select
+            id="airport-hub-select"
             value={selectedAirportId}
             onChange={e => setSelectedAirportId(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold focus:outline-none focus:border-cyan-500"
+            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-bold focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
           >
             {airports.map(a => (
               <option key={a.airport.id} value={a.airport.id}>
@@ -185,6 +178,34 @@ export const AirportCapacityView: React.FC<AirportCapacityViewProps> = ({
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+
+        {/* Accessible Data Summary for Screen Readers */}
+        <div className="sr-only" aria-live="polite">
+          <h4>Hourly Movement Breakdown for {selectedAnalysis.airport.name} ({selectedAnalysis.airport.id})</h4>
+          <table>
+            <caption>Hourly Movements vs Runway Capacity Limit</caption>
+            <thead>
+              <tr>
+                <th scope="col">Hour Window</th>
+                <th scope="col">Departures</th>
+                <th scope="col">Arrivals</th>
+                <th scope="col">Total Movements</th>
+                <th scope="col">Hourly Capacity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chartData.map(h => (
+                <tr key={h.hour}>
+                  <td>{h.hour}</td>
+                  <td>{h.departures}</td>
+                  <td>{h.arrivals}</td>
+                  <td>{h.total}</td>
+                  <td>{h.capacity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

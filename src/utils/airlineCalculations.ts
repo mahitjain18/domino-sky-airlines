@@ -11,16 +11,60 @@ import {
   HourlyMovement
 } from '../types/airline';
 
+// -------------------------------------------------------------
+// INPUT SANITIZATION & BOUNDARY VALIDATION HELPERS
+// -------------------------------------------------------------
+
+/**
+ * Strictly sanitizes integer inputs within bounds [min, max].
+ * Handles NaN, Infinity, negative values, and arbitrary non-numeric strings safely.
+ */
+export function sanitizeIntegerInput(
+  val: unknown,
+  min: number = 0,
+  max: number = 360,
+  fallback: number = 0
+): number {
+  if (typeof val === 'number') {
+    if (isNaN(val) || !isFinite(val)) return fallback;
+    return Math.min(max, Math.max(min, Math.floor(val)));
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return fallback;
+    const parsed = parseInt(trimmed, 10);
+    if (isNaN(parsed) || !isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+  }
+  return fallback;
+}
+
+/**
+ * Sanitizes search queries and textual inputs.
+ * Strips ASCII control characters, trims whitespace, and bounds length.
+ */
+export function sanitizeSearchInput(input: unknown, maxLength: number = 100): string {
+  if (typeof input !== 'string') return '';
+  return input.replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, maxLength);
+}
+
 // Helper: Convert "HH:MM" to total minutes from midnight
-export function timeToMinutes(timeStr: string): number {
-  if (!timeStr) return 0;
-  const [h, m] = timeStr.split(':').map(Number);
-  return h * 60 + m;
+export function timeToMinutes(timeStr: string | null | undefined): number {
+  if (!timeStr || typeof timeStr !== 'string') return 0;
+  const parts = timeStr.trim().split(':');
+  if (parts.length < 2) return 0;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return 0;
+  return Math.max(0, h * 60 + m);
 }
 
 // Helper: Convert total minutes from midnight to "HH:MM"
 export function minutesToTime(totalMinutes: number): string {
-  const norm = ((totalMinutes % 1440) + 1440) % 1440;
+  if (typeof totalMinutes !== 'number' || isNaN(totalMinutes) || !isFinite(totalMinutes)) {
+    return '00:00';
+  }
+  const norm = ((Math.floor(totalMinutes) % 1440) + 1440) % 1440;
   const h = Math.floor(norm / 60);
   const m = norm % 60;
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
@@ -554,7 +598,7 @@ export function generateAIRecommendations(
       category: 'Turnaround Optimization',
       priority: 'Medium',
       summary: `Rapid Turnaround Protocol for ${tightTurnarounds.length} 30-Minute Legs`,
-      detail: `Flights DS0402 (GOI), DS0504 (BLR), DS0604 (MAA), DS0704 (BLR), DS1202 (BOM), DS1304 (MAA), and DS1403 (HYD) operate at the absolute minimum legal turnaround of 30 minutes.`,
+      detail: `Flights DS0402 (GOI), DS0504 (BLR), DS0604 (MAA), DS0704 (BLR), DS1202 (BOM), DS1304 (MAA), and DS1403 (HYD) operate at the absolute minimum legal turnaround of ${dataset?.meta?.min_turnaround_minutes || 30} minutes.`,
       expectedImpact: 'Prevents initial minute-level delays from multiplying across subsequent legs.',
       suggestedAction: `Implement dual-door deplaning/boarding and pre-staged ground equipment at these stations.`
     });
@@ -575,6 +619,8 @@ export function simulateFlightDelay(
   affectedFlightsCount: number;
   cascadingDelayMinutes: number;
 } {
+  const sanitizedDelay = sanitizeIntegerInput(delayMinutes, 0, 360, 0);
+
   // Deep clone flights
   const flights: Flight[] = JSON.parse(JSON.stringify(dataset.flights));
   const flightMap = new Map<string, Flight>();
@@ -583,7 +629,7 @@ export function simulateFlightDelay(
   }
 
   const targetFlight = flightMap.get(targetFlightId);
-  if (!targetFlight || delayMinutes <= 0) {
+  if (!targetFlight || sanitizedDelay <= 0) {
     return {
       simulatedFlights: flights,
       affectedFlightsCount: 0,
@@ -596,7 +642,7 @@ export function simulateFlightDelay(
     .filter(f => f.tail_id === targetFlight.tail_id)
     .sort((a, b) => a.leg_order - b.leg_order);
 
-  let currentDelay = delayMinutes;
+  let currentDelay = sanitizedDelay;
   let affectedCount = 0;
   let totalCascadingMins = 0;
 
@@ -639,4 +685,73 @@ export function simulateFlightDelay(
     affectedFlightsCount: affectedCount,
     cascadingDelayMinutes: totalCascadingMins
   };
+}
+
+// -------------------------------------------------------------
+// SPARE AIRCRAFT ROTATION SWAP RECOVERY
+// -------------------------------------------------------------
+/**
+ * Deploys a hot-standby spare aircraft (e.g. VT-DS17 or VT-DS18) to replace
+ * a disrupted or grounded aircraft rotation. Reassigns target legs to the spare,
+ * clears cascading delays, and restores schedule integrity.
+ */
+export function deploySpareSwap(
+  flights: Flight[],
+  spareTail: string,
+  targetTail: string,
+  fromFlightId?: string
+): {
+  updatedFlights: Flight[];
+  swappedLegsCount: number;
+} {
+  const cloned: Flight[] = JSON.parse(JSON.stringify(flights));
+  let swappedCount = 0;
+  let startSwapping = !fromFlightId;
+
+  for (const f of cloned) {
+    if (f.tail_id === targetTail) {
+      if (fromFlightId && f.flight_id === fromFlightId) {
+        startSwapping = true;
+      }
+      if (startSwapping) {
+        f.tail_id = spareTail;
+        f.delay_minutes = 0;
+        f.actual_dep = f.dep;
+        f.actual_arr = f.arr;
+        swappedCount++;
+      }
+    }
+  }
+
+  return {
+    updatedFlights: cloned,
+    swappedLegsCount: swappedCount
+  };
+}
+
+// -------------------------------------------------------------
+// STANDBY CREW RELIEF INTERVENTION
+// -------------------------------------------------------------
+/**
+ * Activates a standby relief crew at an intermediate station to split duty hours,
+ * capping accumulated duty and preventing statutory DGCA 600-minute breaches.
+ */
+export function applyReliefCrew(
+  crews: CrewDutyAnalysis[],
+  crewId: string
+): CrewDutyAnalysis[] {
+  return crews.map(c => {
+    if (c.crew_id === crewId) {
+      const relievedDuty = Math.min(c.total_duty_mins, 480); // Restabilize to 8 hours
+      return {
+        ...c,
+        total_duty_mins: relievedDuty,
+        utilization_percent: Math.round((relievedDuty / c.max_duty_mins) * 100),
+        is_violation: false,
+        is_high_risk: false,
+        remaining_duty_mins: c.max_duty_mins - relievedDuty
+      };
+    }
+    return c;
+  });
 }

@@ -12,13 +12,7 @@ import {
   FileText,
   Printer,
   ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
-  Building,
-  Plane,
-  Users,
-  GitFork,
-  Download
+  Zap
 } from 'lucide-react';
 
 interface ReportsViewProps {
@@ -92,7 +86,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </div>
           <div className="text-right text-[11px] text-slate-400 print:text-gray-600">
             <div>AUDIT REF: DS-OCC-2026-N1</div>
-            <div>STATUS: {turnaroundViolations.length + crewViolations.length === 0 ? 'CERTIFIED COMPLIANT' : 'ACTION REQUIRED'}</div>
+            <div>STATUS: {turnaroundViolations.length + crewViolations.length + capacityOverages.length === 0 ? 'CERTIFIED COMPLIANT' : 'ACTION REQUIRED'}</div>
             <div>DATE: 20-NOV-2026</div>
           </div>
         </div>
@@ -113,7 +107,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 {flights.length} Legs / 16 Tails
               </span>
               <span className="text-[10px] text-emerald-400 print:text-emerald-700">
-                100% Scheduled Completion
+                {totalPax.toLocaleString()} Total Pax • 100% Scheduled
               </span>
             </div>
 
@@ -247,6 +241,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 Southern network buffer securing triangular operations across BLR, HYD, MAA, and COK. Pre-flighted for immediate dispatch in &lt; 25 mins.
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* 5. Autonomous OCC Recommendations */}
+        <div>
+          <h3 className="text-sm font-bold text-white print:text-black uppercase tracking-wider mb-2 flex items-center space-x-2">
+            <Zap className="w-4 h-4 text-cyan-400 print:text-cyan-700" />
+            <span>5. Autonomous Operational Safety Directives ({recommendations.length} Active Directives)</span>
+          </h3>
+          <p className="text-[11px] text-slate-400 print:text-gray-600 mb-3 font-sans">
+            AI-driven proactive mitigations for rotational delays, FDTL duty stabilization, and passenger escort priority:
+          </p>
+          <div className="space-y-2 text-[11px]">
+            {recommendations.slice(0, 4).map(rec => (
+              <div key={rec.id} className="p-2.5 rounded bg-slate-900/60 border border-slate-800 print:border-gray-300 flex items-start justify-between">
+                <div>
+                  <span className="font-bold text-cyan-400 print:text-blue-700 uppercase">[{rec.category}]</span>{' '}
+                  <span className="font-semibold text-white print:text-black">{rec.summary}</span>
+                  <p className="text-slate-400 print:text-gray-600 font-sans mt-0.5">{rec.detail}</p>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-800 text-amber-400 border border-amber-500/30">
+                  {rec.expectedImpact}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 

@@ -4,10 +4,7 @@ import { IndiaFlightMap } from '../components/IndiaFlightMap';
 import {
   Plane,
   Search,
-  Filter,
   ArrowRight,
-  Clock,
-  Users,
   AlertTriangle,
   Sliders
 } from 'lucide-react';
@@ -63,41 +60,52 @@ export const FlightNetworkView: React.FC<FlightNetworkViewProps> = ({
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" aria-hidden="true" />
             <input
               type="text"
+              aria-label="Search flight, tail, or city"
               placeholder="Search flight, tail, city..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono"
+              className="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono focus:ring-1 focus:ring-cyan-500"
             />
           </div>
 
-          <select
-            value={selectedHub}
-            onChange={e => setSelectedHub(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
-          >
-            <option value="all">All Hubs (16)</option>
-            {airports.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.id} - {a.city}
-              </option>
-            ))}
-          </select>
+          <div>
+            <label htmlFor="network-hub-select" className="sr-only">Filter by Hub</label>
+            <select
+              id="network-hub-select"
+              aria-label="Filter flights by airport hub"
+              value={selectedHub}
+              onChange={e => setSelectedHub(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono focus:ring-1 focus:ring-cyan-500"
+            >
+              <option value="all">All Hubs (16)</option>
+              {airports.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.id} - {a.city}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <select
-            value={selectedTail}
-            onChange={e => setSelectedTail(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
-          >
-            <option value="all">All Aircraft (16)</option>
-            {uniqueTails.map(t => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <div>
+            <label htmlFor="network-tail-select" className="sr-only">Filter by Aircraft</label>
+            <select
+              id="network-tail-select"
+              aria-label="Filter flights by aircraft tail"
+              value={selectedTail}
+              onChange={e => setSelectedTail(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono focus:ring-1 focus:ring-cyan-500"
+            >
+              <option value="all">All Aircraft (16)</option>
+              {uniqueTails.map(t => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

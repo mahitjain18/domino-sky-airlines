@@ -1,17 +1,6 @@
 import React, { useState } from 'react';
 import { AirlineDataset, ConnectionAnalysis, Flight } from '../types/airline';
-import {
-  GitFork,
-  CheckCircle2,
-  AlertTriangle,
-  AlertOctagon,
-  Clock,
-  ArrowRight,
-  Users,
-  Building,
-  ShieldCheck,
-  Search
-} from 'lucide-react';
+import { GitFork } from 'lucide-react';
 
 interface PassengerConnectionsViewProps {
   dataset: AirlineDataset;
@@ -62,7 +51,7 @@ export const PassengerConnectionsView: React.FC<PassengerConnectionsViewProps> =
             </h2>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Rule: Connecting flight must depart ≥ min_connect_minutes after inbound flight arrival
+            Rule: Connecting flight must depart ≥ min_connect_minutes after inbound flight arrival • Monitored across {flights.length} active legs in dataset {dataset.meta.dataset}
           </p>
         </div>
 
@@ -92,16 +81,19 @@ export const PassengerConnectionsView: React.FC<PassengerConnectionsViewProps> =
       {/* Filter Bar */}
       <div className="glass-panel p-3.5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
         <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="conn-search-input" className="sr-only">Search passenger connections</label>
           <input
+            id="conn-search-input"
             type="text"
             placeholder="Search pair, flight..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-          >
-          </input>
+          />
 
+          <label htmlFor="conn-hub-filter" className="sr-only">Filter by Transfer Hub</label>
           <select
+            id="conn-hub-filter"
             value={selectedHub}
             onChange={e => setSelectedHub(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-white focus:outline-none focus:border-cyan-500"
@@ -114,7 +106,9 @@ export const PassengerConnectionsView: React.FC<PassengerConnectionsViewProps> =
             ))}
           </select>
 
+          <label htmlFor="conn-status-filter" className="sr-only">Filter by MCT Status</label>
           <select
+            id="conn-status-filter"
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as 'all' | 'tight' | 'broken' | 'valid')}
             className="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-white focus:outline-none focus:border-cyan-500"

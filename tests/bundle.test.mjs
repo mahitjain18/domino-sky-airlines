@@ -153,13 +153,38 @@ var RAW_AIRLINE_DATA = {
 };
 
 // src/utils/airlineCalculations.ts
+function sanitizeIntegerInput(val, min = 0, max = 360, fallback = 0) {
+  if (typeof val === "number") {
+    if (isNaN(val) || !isFinite(val)) return fallback;
+    return Math.min(max, Math.max(min, Math.floor(val)));
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!trimmed) return fallback;
+    const parsed = parseInt(trimmed, 10);
+    if (isNaN(parsed) || !isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, parsed));
+  }
+  return fallback;
+}
+function sanitizeSearchInput(input, maxLength = 100) {
+  if (typeof input !== "string") return "";
+  return input.replace(/[\x00-\x1F\x7F]/g, "").trim().slice(0, maxLength);
+}
 function timeToMinutes(timeStr) {
-  if (!timeStr) return 0;
-  const [h, m] = timeStr.split(":").map(Number);
-  return h * 60 + m;
+  if (!timeStr || typeof timeStr !== "string") return 0;
+  const parts = timeStr.trim().split(":");
+  if (parts.length < 2) return 0;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return 0;
+  return Math.max(0, h * 60 + m);
 }
 function minutesToTime(totalMinutes) {
-  const norm = (totalMinutes % 1440 + 1440) % 1440;
+  if (typeof totalMinutes !== "number" || isNaN(totalMinutes) || !isFinite(totalMinutes)) {
+    return "00:00";
+  }
+  const norm = (Math.floor(totalMinutes) % 1440 + 1440) % 1440;
   const h = Math.floor(norm / 60);
   const m = norm % 60;
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
@@ -344,6 +369,135 @@ function analyzeAirportCapacity(dataset, simulatedFlights) {
     };
   });
 }
+function analyzeFleetStatus(dataset, simulatedFlights) {
+  const flightsToUse = simulatedFlights || dataset.flights;
+  const aircraftMap = /* @__PURE__ */ new Map();
+  for (const f of flightsToUse) {
+    if (!aircraftMap.has(f.tail_id)) {
+      aircraftMap.set(f.tail_id, []);
+    }
+    aircraftMap.get(f.tail_id).push(f);
+  }
+  const results = [];
+  aircraftMap.forEach((legs, tail_id) => {
+    legs.sort((a, b) => a.leg_order - b.leg_order);
+    const legs_count = legs.length;
+    const total_block_minutes = legs.reduce((acc, l) => acc + l.block_minutes, 0);
+    const total_pax = legs.reduce((acc, l) => acc + l.pax, 0);
+    const avg_load_factor = Math.round(total_pax / (legs_count * dataset.meta.seats_per_aircraft) * 100);
+    const first_dep = legs[0]?.actual_dep || legs[0]?.dep || "--:--";
+    const last_arr = legs[legs_count - 1]?.actual_arr || legs[legs_count - 1]?.arr || "--:--";
+    const current_location = legs[legs_count - 1]?.destination || legs[0]?.origin || "Unknown";
+    let has_turnaround_issue = false;
+    for (let i = 1; i < legs.length; i++) {
+      const prevArr = timeToMinutes(legs[i - 1].actual_arr || legs[i - 1].arr);
+      const currDep = timeToMinutes(legs[i].actual_dep || legs[i].dep);
+      if (currDep - prevArr < dataset.meta.min_turnaround_minutes) {
+        has_turnaround_issue = true;
+        break;
+      }
+    }
+    const hasDelay = legs.some((l) => (l.delay_minutes || 0) > 0);
+    results.push({
+      tail_id,
+      legs_count,
+      total_block_minutes,
+      total_pax,
+      avg_load_factor,
+      first_dep,
+      last_arr,
+      current_location,
+      status: has_turnaround_issue ? "grounded" : hasDelay ? "delayed" : "active",
+      flights: legs,
+      has_turnaround_issue
+    });
+  });
+  return results.sort((a, b) => a.tail_id.localeCompare(b.tail_id));
+}
+function generateOperationalAlerts(turnarounds, crews, connections, airports) {
+  const alerts = [];
+  turnarounds.filter((t) => t.is_violation).forEach((t) => {
+    alerts.push({
+      id: `ALT-TA-${t.flight_id}`,
+      type: "turnaround",
+      severity: "critical",
+      title: `Turnaround Violation: ${t.tail_id} at ${t.origin}`,
+      message: `Flight ${t.flight_id} has only ${t.actual_gap_mins} min turnaround (required minimum: ${t.min_required_mins} min).`,
+      targetId: t.flight_id,
+      actionableRecommendation: `Delay ${t.flight_id} departure by ${t.min_required_mins - (t.actual_gap_mins || 0)} mins to guarantee 30-min turnaround safety standard.`
+    });
+  });
+  turnarounds.filter((t) => t.is_tight).forEach((t) => {
+    alerts.push({
+      id: `ALT-TA-TIGHT-${t.flight_id}`,
+      type: "turnaround",
+      severity: "advisory",
+      title: `Tight Turnaround Buffer: Flight ${t.flight_id}`,
+      message: `Flight ${t.flight_id} has a strict ${t.actual_gap_mins} min turnaround at ${t.origin}. Ground crew priority dispatch recommended.`,
+      targetId: t.flight_id,
+      actionableRecommendation: `Notify ${t.origin} ground handling for expedited passenger deplaning and priority catering/refueling.`
+    });
+  });
+  crews.filter((c) => c.is_violation).forEach((c) => {
+    alerts.push({
+      id: `ALT-CRW-VIO-${c.crew_id}`,
+      type: "crew_duty",
+      severity: "critical",
+      title: `DGCA Crew Duty Limit Exceeded: Crew ${c.crew_id}`,
+      message: `Crew ${c.crew_id} total scheduled duty is ${c.total_duty_mins} mins, exceeding maximum legal limit of ${c.max_duty_mins} mins by ${c.total_duty_mins - c.max_duty_mins} mins!`,
+      targetId: c.crew_id,
+      actionableRecommendation: `Immediate crew change required at intermediate station or swap last leg to standby crew.`
+    });
+  });
+  crews.filter((c) => c.is_high_risk).forEach((c) => {
+    alerts.push({
+      id: `ALT-CRW-WARN-${c.crew_id}`,
+      type: "crew_duty",
+      severity: "warning",
+      title: `Crew Approaching Duty Cap: Crew ${c.crew_id} (${c.base})`,
+      message: `Crew ${c.crew_id} duty is ${c.total_duty_mins}/${c.max_duty_mins} mins (${c.utilization_percent}% capacity). Only ${c.remaining_duty_mins} mins safety buffer remains.`,
+      targetId: c.crew_id,
+      actionableRecommendation: `Monitor ${c.tail_id} closely; any upstream delay > ${c.remaining_duty_mins} mins will violate aviation safety limits.`
+    });
+  });
+  connections.filter((c) => c.is_broken).forEach((c) => {
+    alerts.push({
+      id: `ALT-CX-BRK-${c.connection_id}`,
+      type: "connection",
+      severity: "critical",
+      title: `Broken Passenger Connection: ${c.connection_id} at ${c.airport}`,
+      message: `${c.passengers} passengers will miss connecting flight ${c.to_flight} (connecting window is only ${c.actual_gap_mins}m, below ${c.min_connect_minutes}m threshold).`,
+      targetId: c.connection_id,
+      actionableRecommendation: `Hold connecting flight ${c.to_flight} by ${c.min_connect_minutes - c.actual_gap_mins} mins or auto-rebook affected ${c.passengers} pax on next available sector.`
+    });
+  });
+  connections.filter((c) => c.is_tight).forEach((c) => {
+    alerts.push({
+      id: `ALT-CX-TIGHT-${c.connection_id}`,
+      type: "connection",
+      severity: "advisory",
+      title: `Tight Connection Alert: ${c.connection_id} at ${c.airport}`,
+      message: `${c.passengers} passengers transfer from ${c.from_flight} to ${c.to_flight} with only ${c.buffer_mins} mins buffer above minimum.`,
+      targetId: c.connection_id,
+      actionableRecommendation: `Assign express gate-to-gate escort at ${c.airport} and prioritize baggage transfer.`
+    });
+  });
+  airports.filter((a) => a.has_overage).forEach((a) => {
+    const overHours = a.hourly_movements.filter((h) => h.is_over_capacity);
+    for (const h of overHours) {
+      alerts.push({
+        id: `ALT-APT-${a.airport.id}-${h.hour}`,
+        type: "airport_capacity",
+        severity: "warning",
+        title: `Runway Congestion: ${a.airport.id} during ${h.hour_label}`,
+        message: `${h.total_movements} movements scheduled against hourly runway capacity of ${h.capacity} (${h.utilization_percent}% load).`,
+        targetId: a.airport.id,
+        actionableRecommendation: `Coordinate with ${a.airport.name} ATC for flow management and slot smoothing.`
+      });
+    }
+  });
+  return alerts;
+}
 function generateAIRecommendations(dataset, turnarounds, crews, connections, airports, spares) {
   const recommendations = [];
   const cr03 = crews.find((c) => c.crew_id === "CR03");
@@ -426,7 +580,7 @@ function generateAIRecommendations(dataset, turnarounds, crews, connections, air
       category: "Turnaround Optimization",
       priority: "Medium",
       summary: `Rapid Turnaround Protocol for ${tightTurnarounds.length} 30-Minute Legs`,
-      detail: `Flights DS0402 (GOI), DS0504 (BLR), DS0604 (MAA), DS0704 (BLR), DS1202 (BOM), DS1304 (MAA), and DS1403 (HYD) operate at the absolute minimum legal turnaround of 30 minutes.`,
+      detail: `Flights DS0402 (GOI), DS0504 (BLR), DS0604 (MAA), DS0704 (BLR), DS1202 (BOM), DS1304 (MAA), and DS1403 (HYD) operate at the absolute minimum legal turnaround of ${dataset?.meta?.min_turnaround_minutes || 30} minutes.`,
       expectedImpact: "Prevents initial minute-level delays from multiplying across subsequent legs.",
       suggestedAction: `Implement dual-door deplaning/boarding and pre-staged ground equipment at these stations.`
     });
@@ -434,13 +588,14 @@ function generateAIRecommendations(dataset, turnarounds, crews, connections, air
   return recommendations;
 }
 function simulateFlightDelay(dataset, targetFlightId, delayMinutes) {
+  const sanitizedDelay = sanitizeIntegerInput(delayMinutes, 0, 360, 0);
   const flights = JSON.parse(JSON.stringify(dataset.flights));
   const flightMap = /* @__PURE__ */ new Map();
   for (const f of flights) {
     flightMap.set(f.flight_id, f);
   }
   const targetFlight = flightMap.get(targetFlightId);
-  if (!targetFlight || delayMinutes <= 0) {
+  if (!targetFlight || sanitizedDelay <= 0) {
     return {
       simulatedFlights: flights,
       affectedFlightsCount: 0,
@@ -448,7 +603,7 @@ function simulateFlightDelay(dataset, targetFlightId, delayMinutes) {
     };
   }
   const aircraftLegs = flights.filter((f) => f.tail_id === targetFlight.tail_id).sort((a, b) => a.leg_order - b.leg_order);
-  let currentDelay = delayMinutes;
+  let currentDelay = sanitizedDelay;
   let affectedCount = 0;
   let totalCascadingMins = 0;
   for (const leg of aircraftLegs) {
@@ -484,6 +639,45 @@ function simulateFlightDelay(dataset, targetFlightId, delayMinutes) {
     affectedFlightsCount: affectedCount,
     cascadingDelayMinutes: totalCascadingMins
   };
+}
+function deploySpareSwap(flights, spareTail, targetTail, fromFlightId) {
+  const cloned = JSON.parse(JSON.stringify(flights));
+  let swappedCount = 0;
+  let startSwapping = !fromFlightId;
+  for (const f of cloned) {
+    if (f.tail_id === targetTail) {
+      if (fromFlightId && f.flight_id === fromFlightId) {
+        startSwapping = true;
+      }
+      if (startSwapping) {
+        f.tail_id = spareTail;
+        f.delay_minutes = 0;
+        f.actual_dep = f.dep;
+        f.actual_arr = f.arr;
+        swappedCount++;
+      }
+    }
+  }
+  return {
+    updatedFlights: cloned,
+    swappedLegsCount: swappedCount
+  };
+}
+function applyReliefCrew(crews, crewId) {
+  return crews.map((c) => {
+    if (c.crew_id === crewId) {
+      const relievedDuty = Math.min(c.total_duty_mins, 480);
+      return {
+        ...c,
+        total_duty_mins: relievedDuty,
+        utilization_percent: Math.round(relievedDuty / c.max_duty_mins * 100),
+        is_violation: false,
+        is_high_risk: false,
+        remaining_duty_mins: c.max_duty_mins - relievedDuty
+      };
+    }
+    return c;
+  });
 }
 
 // tests/airlineOperations.test.ts
@@ -631,15 +825,108 @@ describe("DOMINO SKY \u2014 AI AIRLINE OCC REGULATORY & FUNCTIONAL TESTS", () =>
       assert.ok(crewRec, "Must generate a Crew Management recommendation for CR03");
     });
   });
-  describe("7. High-Precision Time Utility Functions", () => {
+  describe("7. High-Precision Time Utility Functions & Boundary Defense", () => {
     test("timeToMinutes and minutesToTime perform exact bidirectional conversions", () => {
       assert.strictEqual(timeToMinutes("06:00"), 360);
       assert.strictEqual(timeToMinutes("23:59"), 1439);
       assert.strictEqual(minutesToTime(360), "06:00");
       assert.strictEqual(minutesToTime(1439), "23:59");
     });
+    test("timeToMinutes handles invalid, null, undefined, and malformed strings safely", () => {
+      assert.strictEqual(timeToMinutes(""), 0);
+      assert.strictEqual(timeToMinutes(null), 0);
+      assert.strictEqual(timeToMinutes(void 0), 0);
+      assert.strictEqual(timeToMinutes("invalid"), 0);
+      assert.strictEqual(timeToMinutes("25:abc"), 0);
+    });
+    test("minutesToTime handles negative numbers and NaN with safe 24-hour wrap", () => {
+      assert.strictEqual(minutesToTime(-60), "23:00");
+      assert.strictEqual(minutesToTime(NaN), "00:00");
+      assert.strictEqual(minutesToTime(Infinity), "00:00");
+      assert.strictEqual(minutesToTime(1500), "01:00");
+    });
+    test("addMinutesToTime rolls over midnight seamlessly", () => {
+      assert.strictEqual(addMinutesToTime("23:45", 30), "00:15");
+      assert.strictEqual(addMinutesToTime("00:10", 50), "01:00");
+    });
   });
-  describe("8. Kinetic Airspace Topology Projection & Deterministic Engine", () => {
+  describe("8. Input Sanitization & Security Bounds Defense", () => {
+    test("sanitizeIntegerInput strictly bounds numbers, clamps ranges, and rejects NaN", () => {
+      assert.strictEqual(sanitizeIntegerInput(30, 0, 360, 0), 30);
+      assert.strictEqual(sanitizeIntegerInput(500, 0, 360, 0), 360);
+      assert.strictEqual(sanitizeIntegerInput(-50, 0, 360, 0), 0);
+      assert.strictEqual(sanitizeIntegerInput("45", 0, 360, 0), 45);
+      assert.strictEqual(sanitizeIntegerInput("bad_input", 0, 360, 30), 30);
+      assert.strictEqual(sanitizeIntegerInput(NaN, 0, 360, 15), 15);
+      assert.strictEqual(sanitizeIntegerInput(42.8, 0, 360, 0), 42);
+    });
+    test("sanitizeSearchInput strips control characters and limits string length", () => {
+      assert.strictEqual(sanitizeSearchInput("  DS0301  "), "DS0301");
+      assert.strictEqual(sanitizeSearchInput("DEL\0\b"), "DEL");
+      assert.strictEqual(sanitizeSearchInput(null), "");
+      assert.strictEqual(sanitizeSearchInput(123), "");
+      const longString = "A".repeat(200);
+      const sanitized = sanitizeSearchInput(longString, 50);
+      assert.strictEqual(sanitized.length, 50);
+    });
+  });
+  describe("9. Hot-Standby Spare Aircraft Deployment Engine", () => {
+    test("deploySpareSwap successfully reassigns target tail and clears cascading delays", () => {
+      const sim = simulateFlightDelay(RAW_AIRLINE_DATA, "DS0301", 45);
+      const delayedTailLegs = sim.simulatedFlights.filter((f) => f.tail_id === "VT-DS03");
+      assert.ok(delayedTailLegs.some((l) => (l.delay_minutes || 0) > 0));
+      const swapResult = deploySpareSwap(sim.simulatedFlights, "VT-DS18", "VT-DS03");
+      assert.strictEqual(swapResult.swappedLegsCount, delayedTailLegs.length);
+      const swappedLegs = swapResult.updatedFlights.filter((f) => f.tail_id === "VT-DS18");
+      assert.strictEqual(swappedLegs.length, delayedTailLegs.length);
+      for (const leg of swappedLegs) {
+        assert.strictEqual(leg.delay_minutes, 0);
+        assert.strictEqual(leg.actual_dep, leg.dep);
+      }
+    });
+    test("applyReliefCrew stabilizes duty hours and removes high-risk warning", () => {
+      const crews = analyzeCrewDuty(RAW_AIRLINE_DATA, RAW_AIRLINE_DATA.flights);
+      const cr03Before = crews.find((c) => c.crew_id === "CR03");
+      assert.strictEqual(cr03Before.is_high_risk, true);
+      assert.strictEqual(cr03Before.total_duty_mins, 590);
+      const relievedCrews = applyReliefCrew(crews, "CR03");
+      const cr03After = relievedCrews.find((c) => c.crew_id === "CR03");
+      assert.strictEqual(cr03After.is_high_risk, false);
+      assert.strictEqual(cr03After.is_violation, false);
+      assert.strictEqual(cr03After.total_duty_mins, 480);
+      assert.strictEqual(cr03After.remaining_duty_mins, 120);
+    });
+  });
+  describe("10. Edge Cases & Degenerate State Handling", () => {
+    test("analyzeTurnarounds handles empty flight array gracefully", () => {
+      const results = analyzeTurnarounds([], 30);
+      assert.strictEqual(results.length, 0);
+    });
+    test("analyzeTurnarounds with a single flight returns turnaround with no previous leg", () => {
+      const singleFlight = [RAW_AIRLINE_DATA.flights[0]];
+      const results = analyzeTurnarounds(singleFlight, 30);
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0].prev_flight_id, null);
+      assert.strictEqual(results[0].is_violation, false);
+    });
+    test("analyzeCrewDuty handles empty flights gracefully", () => {
+      const crews = analyzeCrewDuty(RAW_AIRLINE_DATA, []);
+      assert.strictEqual(crews.length, 16);
+      for (const c of crews) {
+        assert.strictEqual(c.total_duty_mins, 0);
+        assert.strictEqual(c.is_violation, false);
+      }
+    });
+    test("analyzeFleetStatus evaluates all 16 active aircraft and computes valid load factors", () => {
+      const fleet = analyzeFleetStatus(RAW_AIRLINE_DATA, RAW_AIRLINE_DATA.flights);
+      assert.strictEqual(fleet.length, 16);
+      for (const ac of fleet) {
+        assert.ok(ac.avg_load_factor > 0 && ac.avg_load_factor <= 100);
+        assert.strictEqual(ac.status, "active");
+      }
+    });
+  });
+  describe("11. Kinetic Airspace Topology Projection & Deterministic Engine", () => {
     test("All 16 airports project into valid bounding coordinates for Geo Radar mode", () => {
       const minLng = 67.5;
       const maxLng = 94.5;
@@ -655,8 +942,6 @@ describe("DOMINO SKY \u2014 AI AIRLINE OCC REGULATORY & FUNCTIONAL TESTS", () =>
       }
     });
     test("Orbital Constellation positions Mega Hubs, Regional Hubs, and Spokes in concentric rings", () => {
-      const cx = 500;
-      const cy = 350;
       const megaHubs = ["DEL", "BLR", "BOM", "HYD"];
       const regionalHubs = ["AMD", "CCU", "COK", "MAA"];
       for (const apId of megaHubs) {
@@ -676,6 +961,120 @@ describe("DOMINO SKY \u2014 AI AIRLINE OCC REGULATORY & FUNCTIONAL TESTS", () =>
         assert.ok(airportIdSet.has(flight.origin), `Flight ${flight.flight_id} has invalid origin ${flight.origin}`);
         assert.ok(airportIdSet.has(flight.destination), `Flight ${flight.flight_id} has invalid destination ${flight.destination}`);
       }
+    });
+  });
+  describe("12. Flight Data Parsing, Filtering & Sorting Engine", () => {
+    test("Filtering by hub correctly isolates outbound and inbound legs", () => {
+      const delDepartures = RAW_AIRLINE_DATA.flights.filter((f) => f.origin === "DEL");
+      const delArrivals = RAW_AIRLINE_DATA.flights.filter((f) => f.destination === "DEL");
+      assert.strictEqual(delDepartures.length, 11);
+      assert.strictEqual(delArrivals.length, 9);
+      assert.strictEqual(delDepartures.length + delArrivals.length, 20);
+    });
+    test("Filtering by aircraft tail isolates contiguous sequential rotations", () => {
+      const ds01Legs = RAW_AIRLINE_DATA.flights.filter((f) => f.tail_id === "VT-DS01");
+      assert.strictEqual(ds01Legs.length, 5);
+      for (let i = 0; i < ds01Legs.length; i++) {
+        assert.strictEqual(ds01Legs[i].leg_order, i + 1);
+        if (i > 0) {
+          assert.strictEqual(ds01Legs[i].origin, ds01Legs[i - 1].destination);
+        }
+      }
+    });
+    test("Sorting flights by departure time produces strictly non-decreasing chronological order", () => {
+      const sorted = [...RAW_AIRLINE_DATA.flights].sort((a, b) => timeToMinutes(a.dep) - timeToMinutes(b.dep));
+      for (let i = 1; i < sorted.length; i++) {
+        const prevMins = timeToMinutes(sorted[i - 1].dep);
+        const currMins = timeToMinutes(sorted[i].dep);
+        assert.ok(currMins >= prevMins, `Flights out of order: ${sorted[i - 1].dep} > ${sorted[i].dep}`);
+      }
+    });
+    test("Sorting flights by block minutes correctly identifies longest and shortest routes", () => {
+      const sortedByDuration = [...RAW_AIRLINE_DATA.flights].sort((a, b) => b.block_minutes - a.block_minutes);
+      const longest = sortedByDuration[0];
+      const shortest = sortedByDuration[sortedByDuration.length - 1];
+      assert.ok(longest.block_minutes >= 140, `Longest leg should be >= 140m, got ${longest.block_minutes}`);
+      assert.ok(shortest.block_minutes <= 75, `Shortest leg should be <= 75m, got ${shortest.block_minutes}`);
+    });
+  });
+  describe("13. Dashboard KPI Mathematical Aggregation & Fleet Metrics", () => {
+    test("Calculates total booked passenger volume across all scheduled flights", () => {
+      const totalPax = RAW_AIRLINE_DATA.flights.reduce((sum, f) => sum + f.pax, 0);
+      assert.strictEqual(totalPax, 10394);
+    });
+    test("Computes aggregate fleet seat utilization and average load factor", () => {
+      const totalPax = RAW_AIRLINE_DATA.flights.reduce((sum, f) => sum + f.pax, 0);
+      const totalSeatsOffered = RAW_AIRLINE_DATA.flights.length * RAW_AIRLINE_DATA.meta.seats_per_aircraft;
+      assert.strictEqual(totalSeatsOffered, 70 * 180);
+      const overallLoadFactor = totalPax / totalSeatsOffered * 100;
+      assert.ok(overallLoadFactor > 80 && overallLoadFactor < 85, `Expected ~82.5%, got ${overallLoadFactor.toFixed(2)}%`);
+    });
+    test("Computes exact on-time performance percentage at baseline and under delay", () => {
+      const baselineDelayed = RAW_AIRLINE_DATA.flights.filter((f) => (f.delay_minutes || 0) > 0).length;
+      const baselineOtp = (RAW_AIRLINE_DATA.flights.length - baselineDelayed) / RAW_AIRLINE_DATA.flights.length * 100;
+      assert.strictEqual(baselineOtp, 100);
+      const sim = simulateFlightDelay(RAW_AIRLINE_DATA, "DS0301", 45);
+      const delayedCount = sim.simulatedFlights.filter((f) => (f.delay_minutes || 0) > 0).length;
+      assert.strictEqual(delayedCount, 4);
+      const delayedOtp = (sim.simulatedFlights.length - delayedCount) / sim.simulatedFlights.length * 100;
+      assert.strictEqual(delayedOtp.toFixed(1), "94.3");
+    });
+  });
+  describe("14. Airspace Topology Projection Geometry & Screen Reader Textual Parity", () => {
+    test("Orbital Constellation ring radii assign correctly by tier", () => {
+      const getRadius = (tier) => {
+        if (tier === "mega_hub") return 110;
+        if (tier === "regional_hub") return 215;
+        return 320;
+      };
+      for (const airport of RAW_AIRLINE_DATA.airports) {
+        const radius = getRadius(airport.tier);
+        if (airport.tier === "mega_hub") {
+          assert.strictEqual(radius, 110);
+        } else if (airport.tier === "regional_hub") {
+          assert.strictEqual(radius, 215);
+        } else {
+          assert.strictEqual(radius, 320);
+        }
+      }
+    });
+    test("Every airport node in the visual topology maps to accessible textual data table", () => {
+      const airportMap = new Map(RAW_AIRLINE_DATA.airports.map((a) => [a.id, a]));
+      assert.strictEqual(airportMap.size, 16);
+      for (const ap of RAW_AIRLINE_DATA.airports) {
+        assert.ok(ap.id.length === 3, "Airport code must be 3-letter IATA");
+        assert.ok(ap.city.length > 0, "City must not be empty");
+        assert.ok(ap.capacity_per_hour > 0, "Hourly capacity must be positive");
+        assert.ok(["mega_hub", "regional_hub", "spoke"].includes(ap.tier), "Valid tier");
+      }
+    });
+  });
+  describe("15. Operational Alert Generation & Severity Taxonomy", () => {
+    test("Baseline alerts identify zero critical violations and flag advisory warnings", () => {
+      const turnarounds = analyzeTurnarounds(RAW_AIRLINE_DATA.flights, 30);
+      const crews = analyzeCrewDuty(RAW_AIRLINE_DATA, RAW_AIRLINE_DATA.flights);
+      const connections = analyzePassengerConnections(RAW_AIRLINE_DATA, RAW_AIRLINE_DATA.flights);
+      const airports = analyzeAirportCapacity(RAW_AIRLINE_DATA, RAW_AIRLINE_DATA.flights);
+      const alerts = generateOperationalAlerts(turnarounds, crews, connections, airports);
+      const criticalAlerts = alerts.filter((a) => a.severity === "critical");
+      assert.strictEqual(criticalAlerts.length, 0);
+      const crewAlerts = alerts.filter((a) => a.type === "crew_duty");
+      assert.strictEqual(crewAlerts.length, 4);
+      const tightConnAlerts = alerts.filter((a) => a.type === "connection");
+      assert.strictEqual(tightConnAlerts.length, 5);
+    });
+    test("Injecting 45m delay elevates alerts with critical severity and cascading tags", () => {
+      const sim = simulateFlightDelay(RAW_AIRLINE_DATA, "DS0301", 45);
+      const turnarounds = analyzeTurnarounds(sim.simulatedFlights, 30);
+      const crews = analyzeCrewDuty(RAW_AIRLINE_DATA, sim.simulatedFlights);
+      const connections = analyzePassengerConnections(RAW_AIRLINE_DATA, sim.simulatedFlights);
+      const airports = analyzeAirportCapacity(RAW_AIRLINE_DATA, sim.simulatedFlights);
+      const alerts = generateOperationalAlerts(turnarounds, crews, connections, airports);
+      const criticalAlerts = alerts.filter((a) => a.severity === "critical");
+      assert.ok(criticalAlerts.length > 0, "Must produce critical alerts for duty breach or broken connections");
+      const dutyAlert = criticalAlerts.find((a) => a.type === "crew_duty");
+      assert.ok(dutyAlert, "Must flag critical crew duty alert for CR03");
+      assert.strictEqual(dutyAlert.targetId, "CR03");
     });
   });
 });

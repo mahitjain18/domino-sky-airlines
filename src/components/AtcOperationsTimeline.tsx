@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { Flight, OperationalAlert } from '../types/airline';
-import { Clock, Plane, AlertTriangle, CheckCircle2, ChevronRight, Layers } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 interface AtcOperationsTimelineProps {
   flights: Flight[];
-  alerts: OperationalAlert[];
+  alerts?: OperationalAlert[];
   onSelectFlight: (flight: Flight) => void;
   selectedFlightId?: string | null;
 }
 
 export const AtcOperationsTimeline: React.FC<AtcOperationsTimelineProps> = ({
   flights,
-  alerts,
+  alerts = [],
   onSelectFlight,
   selectedFlightId
 }) => {
@@ -76,6 +76,7 @@ export const AtcOperationsTimeline: React.FC<AtcOperationsTimelineProps> = ({
             flightsInHour.map(flight => {
               const isSelected = flight.flight_id === selectedFlightId;
               const isDelayed = (flight.delay_minutes || 0) > 0;
+              const hasAlert = alerts.some(a => a.targetId === flight.flight_id);
 
               return (
                 <div
@@ -84,7 +85,7 @@ export const AtcOperationsTimeline: React.FC<AtcOperationsTimelineProps> = ({
                   className={`p-2 rounded border cursor-pointer transition min-w-[190px] ${
                     isSelected
                       ? 'bg-[#101D2D] border-[#00D9FF] text-white shadow-[0_0_10px_rgba(0,217,255,0.2)]'
-                      : isDelayed
+                      : isDelayed || hasAlert
                       ? 'bg-[#101D2D]/80 border-[#FFB547]/50 text-[#EAF4FF]'
                       : 'bg-[#101D2D]/50 border-[#1E3048] hover:border-[#00D9FF]/40 text-[#8498AD] hover:text-white'
                   }`}

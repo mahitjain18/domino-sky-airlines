@@ -2,14 +2,7 @@ import React, { useState } from 'react';
 import { AirlineDataset, Flight, TurnaroundAnalysis, FleetAircraftStatus } from '../types/airline';
 import {
   Gauge,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
   Plane,
-  ArrowRight,
-  ShieldCheck,
-  Calendar,
-  Layers,
   Sparkles
 } from 'lucide-react';
 import { timeToMinutes } from '../utils/airlineCalculations';
@@ -55,7 +48,7 @@ export const AircraftMonitorView: React.FC<AircraftMonitorViewProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Mandatory minimum turnaround: 30 minutes • 16 Active Tails (VT-DS01 to VT-DS16) + 2 Standby Spares
+            Mandatory minimum turnaround: 30 minutes • 16 Active Tails (VT-DS01 to VT-DS16) • {flights.length} Scheduled Flight Legs • 2 Standby Spares
           </p>
         </div>
 
@@ -241,7 +234,9 @@ export const AircraftMonitorView: React.FC<AircraftMonitorViewProps> = ({
                     return (
                       <div
                         key={leg.flight_id}
-                        className="p-3.5 rounded-lg bg-slate-900/50 border border-slate-800 text-xs font-mono flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
+                        className={`p-3.5 rounded-lg bg-slate-900/50 border text-xs font-mono flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
+                          isDelayed ? 'border-amber-500/40 bg-amber-500/5' : 'border-slate-800'
+                        }`}
                       >
                         <div className="flex items-center space-x-3">
                           <span className="w-6 h-6 rounded-full bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-xs font-bold border border-cyan-500/20">

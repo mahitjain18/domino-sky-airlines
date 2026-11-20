@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { Airport, Flight, SpareAircraft } from '../types/airline';
-import { Plane, Building, ShieldAlert, ArrowRight, Clock, Users } from 'lucide-react';
+import { Plane } from 'lucide-react';
 
 // Custom Map Marker Icons using Leaflet divIcon
 const createAirportIcon = (tier: string, isSelected: boolean) => {
@@ -81,8 +81,6 @@ export const IndiaFlightMap: React.FC<IndiaFlightMapProps> = ({
   onSelectAirport,
   selectedTailId
 }) => {
-  const [hoveredFlight, setHoveredFlight] = useState<Flight | null>(null);
-
   const airportMap = new Map<string, Airport>();
   for (const a of airports) {
     airportMap.set(a.id, a);
@@ -181,10 +179,6 @@ export const IndiaFlightMap: React.FC<IndiaFlightMapProps> = ({
                 weight: lineWeight,
                 opacity: lineOpacity,
                 dashArray: isDelayed ? '6, 6' : undefined
-              }}
-              eventHandlers={{
-                mouseover: () => setHoveredFlight(flight),
-                mouseout: () => setHoveredFlight(null)
               }}
             >
               <Tooltip sticky>

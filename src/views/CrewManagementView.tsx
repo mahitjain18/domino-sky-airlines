@@ -2,14 +2,6 @@ import React, { useState } from 'react';
 import { AirlineDataset, CrewDutyAnalysis, Flight } from '../types/airline';
 import {
   Users,
-  ShieldAlert,
-  ShieldCheck,
-  Clock,
-  AlertTriangle,
-  Plane,
-  Building,
-  CheckCircle2,
-  Calendar,
   Sparkles
 } from 'lucide-react';
 
@@ -57,7 +49,7 @@ export const CrewManagementView: React.FC<CrewManagementViewProps> = ({
             </h2>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Rule: Duty runs from duty_start until scheduled arrival of last flight (Max 600 mins / 10 hours)
+            Rule: Duty runs from duty_start until scheduled arrival of last flight (Max 600 mins / 10 hours) • {dataset.meta.dataset}
           </p>
         </div>
 
@@ -85,11 +77,14 @@ export const CrewManagementView: React.FC<CrewManagementViewProps> = ({
       {/* Filter Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 glass-panel p-3.5 rounded-xl border border-slate-800 text-xs font-mono">
         <div className="flex items-center space-x-2">
-          <span className="text-slate-400">Filter Base:</span>
+          <label htmlFor="crew-base-select" className="text-slate-400">
+            Filter Base:
+          </label>
           <select
+            id="crew-base-select"
             value={selectedBase}
             onChange={e => setSelectedBase(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-white focus:outline-none focus:border-cyan-500"
+            className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
           >
             <option value="all">All Bases (10)</option>
             {bases.map(b => (

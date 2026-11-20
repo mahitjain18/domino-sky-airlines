@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Airport, Flight, SpareAircraft, CrewDutyAnalysis, TurnaroundAnalysis, ConnectionAnalysis, AIRecommendation } from '../types/airline';
 import { KineticAirspaceTopology } from '../components/KineticAirspaceTopology';
 import { FlightIntelligencePanel } from '../components/FlightIntelligencePanel';
-import { Orbit, Compass, Activity, ShieldCheck, Plane } from 'lucide-react';
+import { Orbit } from 'lucide-react';
 
 interface FlightRadarViewProps {
   airports: Airport[];

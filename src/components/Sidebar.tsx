@@ -11,11 +11,8 @@ import {
   BellRing,
   BarChart3,
   Settings,
-  ShieldCheck,
-  AlertTriangle,
   Radio,
-  X,
-  Compass
+  X
 } from 'lucide-react';
 
 export type NavTab =
@@ -93,7 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 pb-3 border-b border-[#1E3048] flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
           <div className="w-7 h-7 rounded bg-[#0A1422] border border-[#00D9FF]/40 flex items-center justify-center text-[#00D9FF]">
-            <Radar className="w-4 h-4 text-[#00D9FF] animate-spin-slow" />
+            <Radar className="w-4 h-4 text-[#00D9FF] animate-spin-slow" aria-hidden="true" />
           </div>
           <div>
             <div className="font-bold text-sm text-[#EAF4FF] tracking-wider">
@@ -109,8 +106,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {onCloseMobile && (
           <button
             onClick={onCloseMobile}
-            className="md:hidden p-1 rounded text-[#8498AD] hover:text-white hover:bg-[#101D2D]"
-            aria-label="Close navigation"
+            className="md:hidden p-1 rounded text-[#8498AD] hover:text-white hover:bg-[#101D2D] focus-visible:ring-2 focus-visible:ring-[#00D9FF] focus-visible:outline-none"
+            aria-label="Close navigation sidebar"
           >
             <X className="w-4 h-4" />
           </button>
@@ -118,7 +115,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation List */}
-      <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto">
+      <nav
+        aria-label="Tactical Flight Operations Consoles"
+        className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto"
+      >
         <div className="text-[9px] font-bold text-[#8498AD]/70 uppercase px-3 py-1 tracking-widest">
           Tactical Consoles
         </div>
@@ -130,7 +130,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={item.id}
               onClick={() => handleSelectTab(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded text-[11px] transition-all group ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded text-[11px] transition-all group focus-visible:ring-2 focus-visible:ring-[#00D9FF] focus-visible:outline-none ${
                 isActive
                   ? 'bg-[#101D2D] text-[#00D9FF] font-bold border-l-2 border-[#00D9FF] shadow-[inset_0_0_12px_rgba(0,217,255,0.15)]'
                   : 'text-[#8498AD] hover:text-[#EAF4FF] hover:bg-[#0A1422] border-l-2 border-transparent'
@@ -141,6 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className={`w-3.5 h-3.5 shrink-0 ${
                     isActive ? 'text-[#00D9FF]' : 'text-[#8498AD] group-hover:text-[#00D9FF]'
                   }`}
+                  aria-hidden="true"
                 />
                 <span className="truncate">{item.label}</span>
               </div>
@@ -158,7 +160,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
 
               {item.id === 'operational-alerts' && criticalAlertsCount > 0 && !isActive && (
-                <span className="w-2 h-2 rounded-full bg-[#FF5364] animate-pulse" />
+                <span
+                  className="w-2 h-2 rounded-full bg-[#FF5364] animate-pulse"
+                  aria-label={`${criticalAlertsCount} critical alerts active`}
+                />
               )}
             </button>
           );
@@ -167,9 +172,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Disruption Simulation Active Warning */}
       {isSimulating && (
-        <div className="m-2.5 p-2 rounded bg-[#FFB547]/10 border border-[#FFB547]/40 text-[#FFB547] text-[10px]">
+        <div
+          role="status"
+          aria-live="polite"
+          className="m-2.5 p-2 rounded bg-[#FFB547]/10 border border-[#FFB547]/40 text-[#FFB547] text-[10px]"
+        >
           <div className="flex items-center space-x-1.5 font-bold">
-            <Radio className="w-3 h-3 text-[#FFB547] animate-spin" />
+            <Radio className="w-3 h-3 text-[#FFB547] animate-spin" aria-hidden="true" />
             <span>Tactical Disruption</span>
           </div>
           <p className="text-[9px] text-[#FFB547]/80 mt-0.5 leading-tight">
@@ -179,11 +188,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Hot-Standby Fleet Status Pill */}
-      <div className="p-3 border-t border-[#1E3048] bg-[#0A1422]/60">
+      <section
+        aria-label="Hot-Standby Fleet Reserves"
+        className="p-3 border-t border-[#1E3048] bg-[#0A1422]/60"
+      >
         <div className="flex items-center justify-between text-[10px] text-[#8498AD] font-bold uppercase mb-1.5">
           <span>Standby Reserves</span>
           <span className="text-[#22D3A6] flex items-center space-x-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22D3A6] animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22D3A6] animate-pulse" aria-hidden="true" />
             <span>Hot</span>
           </span>
         </div>
@@ -203,14 +215,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-[#22D3A6]">Ready 05:00</span>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden md:flex w-56 flex-col h-screen select-none shrink-0 z-30">
+      <aside
+        aria-label="Desktop Operations Navigation"
+        className="hidden md:flex w-56 flex-col h-screen select-none shrink-0 z-30"
+      >
         {renderContent()}
       </aside>
 
@@ -220,8 +235,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity"
             onClick={onCloseMobile}
+            aria-hidden="true"
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-64 md:hidden shadow-2xl">
+          <aside
+            aria-label="Mobile Operations Navigation"
+            className="fixed inset-y-0 left-0 z-50 w-64 md:hidden shadow-2xl"
+          >
             {renderContent()}
           </aside>
         </>

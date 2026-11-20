@@ -7,24 +7,15 @@ import {
   AIRecommendation
 } from '../types/airline';
 import {
-  ShieldAlert,
-  ShieldCheck,
-  AlertTriangle,
-  Clock,
   Users,
   Plane,
-  ArrowRight,
   Sparkles,
-  Sliders,
-  CheckCircle2,
-  RefreshCw,
-  Layers,
-  MapPin
+  Sliders
 } from 'lucide-react';
 
 interface FlightIntelligencePanelProps {
   flight: Flight;
-  allFlights: Flight[];
+  allFlights?: Flight[];
   crews: CrewDutyAnalysis[];
   turnarounds: TurnaroundAnalysis[];
   connections: ConnectionAnalysis[];
@@ -35,7 +26,6 @@ interface FlightIntelligencePanelProps {
 
 export const FlightIntelligencePanel: React.FC<FlightIntelligencePanelProps> = ({
   flight,
-  allFlights,
   crews,
   turnarounds,
   connections,
@@ -243,11 +233,19 @@ export const FlightIntelligencePanel: React.FC<FlightIntelligencePanelProps> = (
 
         {/* Tactical Actions */}
         <div className="pt-2 border-t border-[#1E3048] space-y-2">
+          {onDeploySpareForFlight && isDelayed && (
+            <button
+              onClick={() => onDeploySpareForFlight(flight.tail_id)}
+              className="w-full py-2 rounded bg-[#061C18] hover:bg-[#0A2E27] border border-[#22D3A6]/50 text-[#22D3A6] hover:text-white font-bold flex items-center justify-center space-x-1.5 transition focus-visible:ring-2 focus-visible:ring-[#22D3A6] focus-visible:outline-none"
+            >
+              <span>AUTHORIZE STANDBY SPARE SWAP</span>
+            </button>
+          )}
           <button
             onClick={() => onSimulateDelayForFlight(flight.flight_id)}
-            className="w-full py-2 rounded bg-[#0A1422] hover:bg-[#1A3065] border border-[#00D9FF]/40 text-[#00D9FF] hover:text-white font-bold flex items-center justify-center space-x-1.5 transition"
+            className="w-full py-2 rounded bg-[#0A1422] hover:bg-[#1A3065] border border-[#00D9FF]/40 text-[#00D9FF] hover:text-white font-bold flex items-center justify-center space-x-1.5 transition focus-visible:ring-2 focus-visible:ring-[#00D9FF] focus-visible:outline-none"
           >
-            <Sliders className="w-3.5 h-3.5" />
+            <Sliders className="w-3.5 h-3.5" aria-hidden="true" />
             <span>INJECT DELAY SIMULATION</span>
           </button>
         </div>

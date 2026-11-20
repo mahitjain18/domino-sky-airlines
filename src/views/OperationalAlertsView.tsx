@@ -3,12 +3,9 @@ import { OperationalAlert, Flight, CrewDutyAnalysis, TurnaroundAnalysis, Connect
 import {
   BellRing,
   AlertTriangle,
-  Info,
   CheckCircle2,
   ShieldAlert,
   ArrowRight,
-  Filter,
-  Sparkles,
   Search
 } from 'lucide-react';
 
@@ -64,7 +61,7 @@ export const OperationalAlertsView: React.FC<OperationalAlertsViewProps> = ({
               </span>
             </div>
             <div className="text-[10px] text-[#8498AD]">
-              Continuous network validation for Turnaround (&lt;30m), FDTL (&gt;600m), MCT Breaches & Runway Capacity
+              Continuous network validation across {flights.length} flights, {crews.length} crews, {turnarounds.length} turnarounds, and {connections.length} connections.
             </div>
           </div>
         </div>
@@ -180,8 +177,8 @@ export const OperationalAlertsView: React.FC<OperationalAlertsViewProps> = ({
 
                   {alert.targetId && (
                     <button
-                      onClick={() => onSelectFlightForDelay(alert.targetId!)}
-                      className="shrink-0 px-2.5 py-1.5 rounded bg-[#0A1422] hover:bg-[#1A3065] border border-[#1E3048] text-[#00D9FF] text-[10px] font-bold transition flex items-center space-x-1"
+                      onClick={() => alert.targetId && onSelectFlightForDelay(alert.targetId)}
+                      className="shrink-0 px-2.5 py-1.5 rounded bg-[#0A1422] hover:bg-[#1A3065] border border-[#1E3048] text-[#00D9FF] text-[10px] font-bold transition flex items-center space-x-1 focus-visible:ring-2 focus-visible:ring-[#00D9FF] focus-visible:outline-none"
                     >
                       <span>TEST DISRUPTION</span>
                       <ArrowRight className="w-3 h-3" />

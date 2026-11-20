@@ -8,22 +8,23 @@ import {
   AirportCapacityAnalysis,
   AIRecommendation
 } from '../types/airline';
+import { sanitizeSearchInput, sanitizeIntegerInput } from '../utils/airlineCalculations';
 import {
   Bot,
   Sparkles,
   Sliders,
   Play,
   RotateCcw,
-  CheckCircle2,
-  AlertTriangle,
   ArrowRight,
-  ShieldCheck,
-  Send,
-  Zap,
-  Plane,
-  Clock,
-  Layers
+  Send
 } from 'lucide-react';
+
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+  time: string;
+}
 
 interface AIAssistantViewProps {
   dataset: AirlineDataset;
@@ -59,23 +60,24 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   const [selectedFlight, setSelectedFlight] = useState<string>(flights[0]?.flight_id || 'DS0301');
   const [delayInput, setDelayInput] = useState<number>(30);
   const totalTransitPassengers = connections.reduce((sum, c) => sum + (c.passengers || 0), 0);
-  const [chatMessages, setChatMessages] = useState<
-    { sender: 'user' | 'ai'; text: string; time: string }[]
-  >([
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
+      id: 'welcome-msg',
       sender: 'ai',
-      text: `Welcome to DOMINO SKY AI OCC Operations Assistant. All ${flights.length} flights, 16 crews, 21 connection pairs, and 2 spare aircraft are actively monitored against DGCA safety rules.`,
+      text: `Welcome to DOMINO SKY AI OCC Operations Assistant (${dataset.meta.dataset}). All ${flights.length} flights, ${crews.length} crews, ${connections.length} connection pairs, and 2 spare aircraft are actively monitored against DGCA safety rules.`,
       time: '11:00'
     }
   ]);
   const [queryInput, setQueryInput] = useState<string>('');
 
   const handleSendQuery = (customText?: string) => {
-    const textToSend = customText || queryInput;
+    const raw = customText || queryInput;
+    const textToSend = sanitizeSearchInput(raw, 300);
     if (!textToSend.trim()) return;
 
-    const userMsg = {
-      sender: 'user' as const,
+    const userMsg: ChatMessage = {
+      id: `msg-${Date.now()}-user`,
+      sender: 'user',
       text: textToSend,
       time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
     };
@@ -85,23 +87,24 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
 
     if (lower.includes('crew') || lower.includes('duty')) {
       const highRisk = crews.filter(c => c.is_high_risk);
-      reply = `Crew Duty Audit: 16 crews evaluated. 0 legal violations at baseline. Critical attention required for Crew CR03 (Base DEL) operating VT-DS03 at 590/600 mins (98.3% duty cap), followed by CR08 (Base HYD) at 580/600 mins. A relief crew is recommended at DEL.`;
+      reply = `Crew Duty Audit: ${crews.length} crews evaluated (${highRisk.length} high-risk). 0 legal violations at baseline. Critical attention required for Crew CR03 (Base DEL) operating VT-DS03 at 590/600 mins (98.3% duty cap), followed by CR08 (Base HYD) at 580/600 mins. A relief crew is recommended at DEL.`;
     } else if (lower.includes('spare') || lower.includes('aircraft')) {
       reply = `Spare Fleet Readiness: 2 hot-standby aircraft active with 180 seats each. VT-DS18 stationed at Indira Gandhi International (DEL) ready from 05:00 IST; VT-DS17 stationed at Kempegowda International (BLR) ready from 05:00 IST. Both fueled and available for dispatch in < 25 mins.`;
     } else if (lower.includes('connection') || lower.includes('passenger') || lower.includes('transit')) {
       const tight = connections.filter(c => c.is_tight);
-      reply = `Passenger Connection Integrity: 21 transit pairs monitored (${totalTransitPassengers} total transit passengers). 0 broken connections scheduled. However, ${tight.length} pairs operate with ≤ 15m safety buffer above MCT (minimum connecting time). Highest risk: CX14 at DEL (50m gap vs 45m MCT for 20 pax). Priority tarmac escorts advised.`;
+      reply = `Passenger Connection Integrity: ${connections.length} transit pairs monitored (${totalTransitPassengers} total transit passengers). 0 broken connections scheduled. However, ${tight.length} pairs operate with ≤ 15m safety buffer above MCT (minimum connecting time). Highest risk: CX14 at DEL (50m gap vs 45m MCT for 20 pax). Priority tarmac escorts advised.`;
     } else if (lower.includes('turnaround') || lower.includes('30')) {
       const tightTa = turnarounds.filter(t => t.is_tight);
       reply = `Turnaround Compliance: Minimum 30-minute standard strictly enforced. All ${flights.length} scheduled legs meet or exceed 30 mins. ${tightTa.length} legs operate at exact 30-35m minimums (e.g. DS0402 at GOI, DS0504 at BLR). Dual-door boarding and expedited refueling pre-staged.`;
     } else if (lower.includes('airport') || lower.includes('capacity') || lower.includes('del')) {
-      reply = `Airport Runway Capacity: 16 airports evaluated across 24 hourly buckets. No runway capacity overages detected. DEL is peak hub with 5 movements during hour 12:00 against 40/hr capacity; BLR peaks at 14:00 with 5 movements against 34/hr capacity.`;
+      reply = `Airport Runway Capacity: ${airports.length} airports evaluated across 24 hourly buckets. No runway capacity overages detected. DEL is peak hub with 5 movements during hour 12:00 against 40/hr capacity; BLR peaks at 14:00 with 5 movements against 34/hr capacity.`;
     } else {
       reply = `Operational Analysis: System running nominal across all ${flights.length} flight legs. Recommend reviewing AI Recommendations for proactive buffer enhancement on rotation VT-DS03 and transit pair CX14.`;
     }
 
-    const aiMsg = {
-      sender: 'ai' as const,
+    const aiMsg: ChatMessage = {
+      id: `msg-${Date.now()}-ai`,
+      sender: 'ai',
       text: reply,
       time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
     };
@@ -194,13 +197,19 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                   <span className="text-amber-400 font-bold">{delayInput} Minutes</span>
                 </div>
                 <input
+                  id="ai-delay-input"
                   type="range"
                   min="10"
                   max="120"
                   step="5"
                   value={delayInput}
-                  onChange={e => setDelayInput(Number(e.target.value))}
-                  className="w-full accent-cyan-500"
+                  onChange={e => setDelayInput(sanitizeIntegerInput(e.target.value, 10, 120, 30))}
+                  aria-label="Disruption delay duration in minutes"
+                  aria-valuemin={10}
+                  aria-valuemax={120}
+                  aria-valuenow={delayInput}
+                  aria-valuetext={`${delayInput} minutes`}
+                  className="w-full accent-cyan-500 cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] text-slate-500 mt-1">
                   <span>+10m</span>
@@ -363,10 +372,15 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
         </div>
 
         {/* Chat Messages */}
-        <div className="space-y-2.5 max-h-[220px] overflow-y-auto mb-3 p-3 rounded-lg bg-slate-950/70 border border-slate-800 font-mono text-xs">
-          {chatMessages.map((msg, i) => (
+        <div
+          role="log"
+          aria-live="polite"
+          aria-label="AI Assistant Operations Log"
+          className="space-y-2.5 max-h-[220px] overflow-y-auto mb-3 p-3 rounded-lg bg-slate-950/70 border border-slate-800 font-mono text-xs"
+        >
+          {chatMessages.map(msg => (
             <div
-              key={i}
+              key={msg.id}
               className={`p-2.5 rounded-lg ${
                 msg.sender === 'user'
                   ? 'bg-cyan-950/40 border border-cyan-500/30 text-cyan-200 ml-8'

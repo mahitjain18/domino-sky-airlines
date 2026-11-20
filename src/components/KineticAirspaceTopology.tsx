@@ -1,15 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Airport, Flight, SpareAircraft } from '../types/airline';
 import {
-  Compass,
-  Layers,
   MapPin,
   Plane,
   Eye,
   EyeOff,
-  Filter,
-  CheckCircle2,
-  AlertTriangle,
   ZoomIn,
   ZoomOut,
   RotateCcw,
@@ -17,18 +12,10 @@ import {
   Minimize2,
   Search,
   X,
-  Sparkles,
   Radio,
-  Sliders,
   Globe2,
   Orbit,
-  Box,
-  Clock,
-  Users,
-  ShieldCheck,
-  ArrowRight,
-  TrendingUp,
-  Activity
+  Box
 } from 'lucide-react';
 
 export type TopologyMode = 'geo-radar' | 'holo-tilt' | 'orbital-constellation';
@@ -583,6 +570,42 @@ export const KineticAirspaceTopology: React.FC<KineticAirspaceTopologyProps> = (
         {/* Background Cyber Topology Grid */}
         <div className="absolute inset-0 radar-grid-bg opacity-30 pointer-events-none" />
 
+        {/* Screen Reader Accessible Data Alternative for Topology Modes */}
+        <div className="sr-only" aria-live="polite">
+          <h3>Airspace Topology Network Summary</h3>
+          <p>
+            Current visualization mode: {mode === 'geo-radar' ? '01 — Geo Radar (Geographic Projections)' : mode === 'holo-tilt' ? '02 — 2.5D Holo Tilt (Perspective Cruising Altitude)' : '03 — Orbital Constellation (Hub Hierarchy Splines)'}.
+            Displaying {filteredFlights.length} flights across {airports.length} operational domestic airports.
+            {spares && spares.length > 0 && `Hot-standby reserves: ${spares.map(s => `${s.tail_id} at ${s.base} (ready ${s.available_from})`).join(', ')}.`}
+          </p>
+          <table>
+            <caption>Operational Network Hub Movements & Flight Volumes</caption>
+            <thead>
+              <tr>
+                <th scope="col">Airport</th>
+                <th scope="col">City</th>
+                <th scope="col">Tier</th>
+                <th scope="col">Capacity</th>
+                <th scope="col">Movements</th>
+              </tr>
+            </thead>
+            <tbody>
+              {airports.map(a => {
+                const aStats = airportStats.get(a.id);
+                return (
+                  <tr key={a.id}>
+                    <td>{a.id}</td>
+                    <td>{a.city}</td>
+                    <td>{a.tier.replace('_', ' ')}</td>
+                    <td>{a.capacity_per_hour}/hr</td>
+                    <td>{aStats?.total || 0}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
         {/* 3D Holo Tilt Wrapper if mode === 'holo-tilt' */}
         <div
           className={`w-full h-full transition-all duration-700 ease-out ${
@@ -597,6 +620,8 @@ export const KineticAirspaceTopology: React.FC<KineticAirspaceTopologyProps> = (
           }}
         >
           <svg
+            role="img"
+            aria-label={`Kinetic Airspace Topology Visualizer - Mode: ${mode}`}
             className="w-full h-full"
             viewBox="0 0 1000 700"
             preserveAspectRatio="xMidYMid meet"
@@ -788,7 +813,6 @@ export const KineticAirspaceTopology: React.FC<KineticAirspaceTopologyProps> = (
                 const pos = getAirportPosition(airport);
                 const isSelected = airport.id === selectedAirportId;
                 const isHovered = airport.id === hoveredAirportId;
-                const stats = airportStats.get(airport.id);
                 const isConnected =
                   selectedAirportId &&
                   airportStats.get(selectedAirportId)?.connectedAirports.has(airport.id);

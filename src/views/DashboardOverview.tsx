@@ -17,18 +17,12 @@ import { AtcOperationsTimeline } from '../components/AtcOperationsTimeline';
 import {
   Plane,
   Armchair,
-  Building,
   Users,
   AlertTriangle,
-  Info,
-  CheckCircle2,
-  Sparkles,
   ArrowRight,
   ShieldCheck,
-  Compass,
-  Radar,
-  Radio,
-  Gauge
+  Gauge,
+  Building
 } from 'lucide-react';
 import {
   BarChart,
@@ -77,10 +71,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   // Dynamic Dataset Calculations
   const totalFlightsCount = flights.length; // 70 scheduled flight legs
   const totalSeatsAcrossFleet = 16 * (dataset.meta?.seats_per_aircraft || 180); // 2,880 active rotation seats
-  const totalAirportsCount = dataset.airports.length || 16;
   const totalBookedPax = flights.reduce((sum, f) => sum + (f.pax || 0), 0); // 10,394 booked
   const totalConnectingPax = connections.reduce((sum, c) => sum + (c.passengers || 0), 0); // 659 transit
-  const totalCrewCount = crews.length || 16;
 
   // Aircraft Status calculations (Dynamic from fleet and simulation)
   const delayedTails = new Set(
@@ -293,7 +285,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   }}
                 />
                 <Bar dataKey="movements" fill="#247BFF" radius={[2, 2, 0, 0]}>
-                  {topAirportsData.map((entry, index) => (
+                  {topAirportsData.map((_, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={index === 0 ? '#00D9FF' : index === 1 ? '#247BFF' : '#1A3065'}
@@ -302,6 +294,30 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+
+            {/* Screen Reader Data Table Alternative for Top Hubs Chart */}
+            <div className="sr-only" aria-live="polite">
+              <h4>Top Hub Runway Movements Data</h4>
+              <table>
+                <caption>Top Hub Movements and Capacities</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Airport Code</th>
+                    <th scope="col">Daily Movements</th>
+                    <th scope="col">Runway Capacity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topAirportsData.map(a => (
+                    <tr key={a.code}>
+                      <td>{a.code}</td>
+                      <td>{a.movements}</td>
+                      <td>{a.capacity}/hr</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="flex justify-between items-center text-[9px] text-[#8498AD] pt-2 border-t border-[#1E3048] mt-1">
