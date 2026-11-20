@@ -1,0 +1,224 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #050B14;
+    color: #EAF4FF;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom dark aviation scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #050B14;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E3048;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00D9FF;
+}
+
+/* Radar & Tactical HUD Animations */
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-radar-sweep {
+  animation: radar-sweep 10s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+.animate-pulse-ring {
+  animation: pulse-ring 4s ease-in-out infinite;
+}
+
+.atc-panel {
+  background-color: #101D2D;
+  border: 1px solid #1E3048;
+}
+
+.atc-panel-header {
+  background: linear-gradient(90deg, rgba(36, 123, 255, 0.08) 0%, rgba(16, 29, 45, 0) 100%);
+  border-bottom: 1px solid #1E3048;
+}
+
+.radar-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(30, 48, 72, 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 48, 72, 0.25) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Neon text shadows */
+.text-glow-cyan {
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.7), 0 0 24px rgba(0, 240, 255, 0.4);
+}
+.text-glow-emerald {
+  text-shadow: 0 0 12px rgba(0, 255, 135, 0.7);
+}
+.text-glow-amber {
+  text-shadow: 0 0 12px rgba(255, 184, 0, 0.7);
+}
+.text-glow-rose {
+  text-shadow: 0 0 12px rgba(255, 0, 85, 0.7);
+}
+.text-glow-purple {
+  text-shadow: 0 0 12px rgba(121, 40, 202, 0.7);
+}
+
+/* ATC Command Centre Panels */
+.glass-panel {
+  background: #101D2D;
+  border: 1px solid #1E3048;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel-hover {
+  transition: all 0.2s ease-in-out;
+}
+.glass-panel-hover:hover {
+  border-color: rgba(0, 217, 255, 0.4);
+  box-shadow: 0 0 20px -3px rgba(0, 217, 255, 0.15);
+}
+
+/* Aviation Radar Pulse & Scanlines */
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.75);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 14px rgba(0, 240, 255, 0);
+  }
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0);
+  }
+}
+
+.animate-radar-pulse {
+  animation: radar-pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* Subtle scanning line effect */
+.bg-scanline {
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0),
+    rgba(255,255,255,0) 50%,
+    rgba(0, 240, 255, 0.02) 50%,
+    rgba(0, 240, 255, 0.02)
+  );
+  background-size: 100% 4px;
+}
+
+/* Leaflet map custom styling for dark mode */
+.leaflet-container {
+  background: #040711 !important;
+  font-family: inherit;
+}
+.leaflet-popup-content-wrapper {
+  background: #0B132B !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(0, 240, 255, 0.35) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.85) !important;
+}
+.leaflet-popup-tip {
+  background: #0B132B !important;
+}
+
+/* =========================================================================
+   KINETIC AIRSPACE TOPOLOGY — 2.5D HOLO TILT & ORBITAL CONSTELLATION STYLES
+   ========================================================================= */
+.perspective-1200 {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.holo-tilt-surface {
+  transform: rotateX(46deg) rotateZ(-12deg) scale(0.92);
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.holo-billboard {
+  transform: rotateZ(12deg) rotateX(-46deg);
+  transform-origin: center bottom;
+}
+
+@keyframes kinetic-dash {
+  to {
+    stroke-dashoffset: -48;
+  }
+}
+
+.animate-kinetic-dash {
+  animation: kinetic-dash 1.4s linear infinite;
+}
+
+@keyframes constellation-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-constellation-orbit {
+  animation: constellation-rotate 120s linear infinite;
+  transform-origin: center center;
+}
+
+@keyframes beacon-pulse {
+  0% {
+    r: 4;
+    opacity: 0.9;
+  }
+  50% {
+    r: 10;
+    opacity: 0.2;
+  }
+  100% {
+    r: 4;
+    opacity: 0.9;
+  }
+}
+
+.animate-beacon-pulse {
+  animation: beacon-pulse 2.2s ease-in-out infinite;
+}
+
